@@ -1,22 +1,24 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
 
 public class Entity : MonoBehaviour
 {
-    public float m_MaxSpeedWalk = 5f;
-    public float m_MaxSpeedRun = 30;
-    public float m_MinSpeed = 0.1f;
-    public float m_TickAccel = 5f;
-    public float m_FrictionConstant = 10f;
-    public float m_JumpStrength = 10f;
-    public float m_GravityStrength = 70f;
+    [SerializeField] private float m_MaxSpeedWalk = 5f;
+    [SerializeField] private float m_MaxSpeedRun = 30;
+    [SerializeField] private float m_JumpStrength = 10f;
+    [SerializeField] private float m_GravityStrength = 70f;
+
+    [SerializeField] private AnimationCurve m_StartMoveCurve = null;
+    [SerializeField] private float m_StartMoveDuration = 0.5f;
+    [SerializeField] private AnimationCurve m_StopMoveCurve = null;
+    [SerializeField] private float m_StopMoveDuration = 0.5f;
 
     private Vector3 m_Velocity = Vector3.zero;
 
     private new Transform transform = null;
     private Collider2D m_Collider = null;
     private AbstractEntityController m_Controller = null;
+    private FSM m_FSM = null;
 
     private List<Platform> m_Touching = new List<Platform>();
 
@@ -28,17 +30,31 @@ public class Entity : MonoBehaviour
         }
     }
 
+    public int CurrentControllerDirection
+    {
+        get
+        {
+            if (m_Controller.IsMovingLeft) { return -1; }
+            if (m_Controller.IsMovingRight) { return 1; }
+            return 0;
+        }
+    }
+
     private void Awake()
     {
         transform = gameObject.transform;
         m_Collider = GetComponent<Collider2D>();
         m_Controller = GetComponentInChildren<AbstractEntityController>();
+
+        m_FSM = new FSM();
+        m_FSM.TransitionTo(IdleState);
     }
 
     private void Update()
     {
+        m_FSM.Update();
+
         DoTouchingUpdate();
-        DoHorizontalUpdate();
         DoVerticalUpdate();
 
         transform.position += m_Velocity * Time.deltaTime;
@@ -105,30 +121,10 @@ public class Entity : MonoBehaviour
 
     private void DoHorizontalUpdate()
     {
-        int direction = 0;
-        if (m_Controller.IsMovingLeft)
+        int direction = CurrentControllerDirection;
+        if (direction == 0)
         {
-            direction += -1;
-        }
-        if (m_Controller.IsMovingRight)
-        {
-            direction += 1;
-        }
-
-        float hVel = m_Velocity.x;
-
-        hVel += direction * m_TickAccel * Time.deltaTime;
-
-        if (direction == 0 || Mathf.Sign(direction) != Mathf.Sign(hVel))
-        {
-            if (Mathf.Abs(hVel) < m_MinSpeed)
-            {
-                hVel = 0f;
-            }
-            else
-            {
-                hVel += -Mathf.Sign(hVel) * m_FrictionConstant * Time.deltaTime;
-            }
+            direction = (int)Mathf.Sign(m_Velocity.x);
         }
 
         float maxSpeed = m_MaxSpeedWalk;
@@ -137,9 +133,9 @@ public class Entity : MonoBehaviour
             maxSpeed = m_MaxSpeedRun;
         }
 
-        hVel = Mathf.Clamp(hVel, -maxSpeed, maxSpeed);
+        float vel = direction * maxSpeed * m_SpeedMultiplier;
 
-        m_Velocity.x = hVel;
+        m_Velocity.x = vel;
     }
 
     private void DoVerticalUpdate()
@@ -154,4 +150,128 @@ public class Entity : MonoBehaviour
             m_Velocity += Vector3.down * m_GravityStrength * Time.deltaTime;
         }
     }
+
+    #region FSM Delegates
+    private FSM.FSMDelegate IdleState(FSM.Step a_Step)
+    {
+        if (CurrentControllerDirection != 0)
+        {
+            return StartMoveState;
+        }
+
+        return null;
+    }
+
+    private float m_StartMoveBeginTime = 0f;
+    private int m_LastDirection = 0;
+    private float m_SpeedMultiplier = 0f;
+    private FSM.FSMDelegate StartMoveState(FSM.Step a_Step)
+    {
+        switch (a_Step)
+        {
+            case FSM.Step.Enter:
+                {
+                    m_StartMoveBeginTime = Time.time;
+                    m_LastDirection = CurrentControllerDirection;
+                    m_SpeedMultiplier = 0f;
+                    return null;
+                }
+            case FSM.Step.Update:
+                {
+                    if (m_LastDirection != CurrentControllerDirection)
+                    {
+                        if (CurrentControllerDirection == 0)
+                        {
+                            return StopMoveState;
+                        }
+                        else
+                        {
+                            return StartMoveState;
+                        }
+                    }
+
+                    float elapsedTime = Time.time - m_StartMoveBeginTime;
+                    float ratio = Mathf.Clamp01(elapsedTime / m_StartMoveDuration);
+                    m_SpeedMultiplier = Mathf.Clamp01(m_StartMoveCurve.Evaluate(ratio));
+
+                    DoHorizontalUpdate();
+
+                    if (ratio == 1f)
+                    {
+                        return MoveState;
+                    }
+                    return null;
+                }
+        }
+
+        return null;
+    }
+
+    private FSM.FSMDelegate MoveState(FSM.Step a_Step)
+    {
+        switch (a_Step)
+        {
+            case FSM.Step.Enter:
+                {
+                    m_LastDirection = CurrentControllerDirection;
+                    m_SpeedMultiplier = 1f;
+                    return null;
+                }
+            case FSM.Step.Update:
+                {
+                    if (m_LastDirection != CurrentControllerDirection)
+                    {
+                        if (CurrentControllerDirection == 0)
+                        {
+                            return StopMoveState;
+                        }
+                        else
+                        {
+                            return StartMoveState;
+                        }
+                    }
+                    DoHorizontalUpdate();
+                    return null;
+                }
+        }
+
+        return null;
+    }
+
+    private float m_StopMoveBeginTime = 0f;
+
+    private FSM.FSMDelegate StopMoveState(FSM.Step a_Step)
+    {
+        switch (a_Step)
+        {
+            case FSM.Step.Enter:
+                {
+                    m_StopMoveBeginTime = Time.time;
+                    return null;
+                }
+            case FSM.Step.Update:
+                {
+                    if (CurrentControllerDirection != 0)
+                    {
+                        return StartMoveState;
+                    }
+
+                    float elapsedTime = Time.time - m_StopMoveBeginTime;
+                    float ratio = Mathf.Clamp01(elapsedTime / m_StopMoveDuration);
+                    m_SpeedMultiplier = Mathf.Clamp01(m_StopMoveCurve.Evaluate(ratio));
+
+                    DoHorizontalUpdate();
+
+                    if (ratio == 1f)
+                    {
+                        return IdleState;
+                    }
+
+                    return null;
+                }
+        }
+
+        return null;
+    }
+    #endregion
 }
