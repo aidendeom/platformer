@@ -7,18 +7,12 @@ public class Entity : MonoBehaviour
     [SerializeField] private float m_MaxSpeedRun = 30;
     [SerializeField] private float m_JumpStrength = 10f;
     [SerializeField] private float m_GravityStrength = 70f;
-
-    [SerializeField] private AnimationCurve m_StartMoveCurve = null;
-    [SerializeField] private float m_StartMoveDuration = 0.5f;
-    [SerializeField] private AnimationCurve m_StopMoveCurve = null;
-    [SerializeField] private float m_StopMoveDuration = 0.5f;
+    [SerializeField] private PlayerMovementFSM m_MovementFSM = null;
 
     private Vector3 m_Velocity = Vector3.zero;
-
     private new Transform transform = null;
     private Collider2D m_Collider = null;
     private AbstractEntityController m_Controller = null;
-    private FSM m_FSM = null;
 
     private List<Platform> m_Touching = new List<Platform>();
 
@@ -30,30 +24,19 @@ public class Entity : MonoBehaviour
         }
     }
 
-    public int CurrentControllerDirection
-    {
-        get
-        {
-            if (m_Controller.IsMovingLeft) { return -1; }
-            if (m_Controller.IsMovingRight) { return 1; }
-            return 0;
-        }
-    }
-
     private void Awake()
     {
         transform = gameObject.transform;
         m_Collider = GetComponent<Collider2D>();
         m_Controller = GetComponentInChildren<AbstractEntityController>();
-
-        m_FSM = new FSM();
-        m_FSM.TransitionTo(IdleState);
+        m_MovementFSM.Initialize(m_Controller);
     }
 
     private void Update()
     {
-        m_FSM.Update();
+        m_MovementFSM.Update();
 
+        DoHorizontalUpdate();
         DoTouchingUpdate();
         DoVerticalUpdate();
 
@@ -121,7 +104,7 @@ public class Entity : MonoBehaviour
 
     private void DoHorizontalUpdate()
     {
-        int direction = CurrentControllerDirection;
+        int direction = m_Controller.CurrentDirectionPressed;
         if (direction == 0)
         {
             direction = (int)Mathf.Sign(m_Velocity.x);
@@ -133,7 +116,7 @@ public class Entity : MonoBehaviour
             maxSpeed = m_MaxSpeedRun;
         }
 
-        float vel = direction * maxSpeed * m_SpeedMultiplier;
+        float vel = direction * maxSpeed * m_MovementFSM.m_SpeedMultiplier;
 
         m_Velocity.x = vel;
     }
@@ -150,128 +133,4 @@ public class Entity : MonoBehaviour
             m_Velocity += Vector3.down * m_GravityStrength * Time.deltaTime;
         }
     }
-
-    #region FSM Delegates
-    private FSM.FSMDelegate IdleState(FSM.Step a_Step)
-    {
-        if (CurrentControllerDirection != 0)
-        {
-            return StartMoveState;
-        }
-
-        return null;
-    }
-
-    private float m_StartMoveBeginTime = 0f;
-    private int m_LastDirection = 0;
-    private float m_SpeedMultiplier = 0f;
-    private FSM.FSMDelegate StartMoveState(FSM.Step a_Step)
-    {
-        switch (a_Step)
-        {
-            case FSM.Step.Enter:
-                {
-                    m_StartMoveBeginTime = Time.time;
-                    m_LastDirection = CurrentControllerDirection;
-                    m_SpeedMultiplier = 0f;
-                    return null;
-                }
-            case FSM.Step.Update:
-                {
-                    if (m_LastDirection != CurrentControllerDirection)
-                    {
-                        if (CurrentControllerDirection == 0)
-                        {
-                            return StopMoveState;
-                        }
-                        else
-                        {
-                            return StartMoveState;
-                        }
-                    }
-
-                    float elapsedTime = Time.time - m_StartMoveBeginTime;
-                    float ratio = Mathf.Clamp01(elapsedTime / m_StartMoveDuration);
-                    m_SpeedMultiplier = Mathf.Clamp01(m_StartMoveCurve.Evaluate(ratio));
-
-                    DoHorizontalUpdate();
-
-                    if (ratio == 1f)
-                    {
-                        return MoveState;
-                    }
-                    return null;
-                }
-        }
-
-        return null;
-    }
-
-    private FSM.FSMDelegate MoveState(FSM.Step a_Step)
-    {
-        switch (a_Step)
-        {
-            case FSM.Step.Enter:
-                {
-                    m_LastDirection = CurrentControllerDirection;
-                    m_SpeedMultiplier = 1f;
-                    return null;
-                }
-            case FSM.Step.Update:
-                {
-                    if (m_LastDirection != CurrentControllerDirection)
-                    {
-                        if (CurrentControllerDirection == 0)
-                        {
-                            return StopMoveState;
-                        }
-                        else
-                        {
-                            return StartMoveState;
-                        }
-                    }
-                    DoHorizontalUpdate();
-                    return null;
-                }
-        }
-
-        return null;
-    }
-
-    private float m_StopMoveBeginTime = 0f;
-
-    private FSM.FSMDelegate StopMoveState(FSM.Step a_Step)
-    {
-        switch (a_Step)
-        {
-            case FSM.Step.Enter:
-                {
-                    m_StopMoveBeginTime = Time.time;
-                    return null;
-                }
-            case FSM.Step.Update:
-                {
-                    if (CurrentControllerDirection != 0)
-                    {
-                        return StartMoveState;
-                    }
-
-                    float elapsedTime = Time.time - m_StopMoveBeginTime;
-                    float ratio = Mathf.Clamp01(elapsedTime / m_StopMoveDuration);
-                    m_SpeedMultiplier = Mathf.Clamp01(m_StopMoveCurve.Evaluate(ratio));
-
-                    DoHorizontalUpdate();
-
-                    if (ratio == 1f)
-                    {
-                        return IdleState;
-                    }
-
-                    return null;
-                }
-        }
-
-        return null;
-    }
-    #endregion
 }
