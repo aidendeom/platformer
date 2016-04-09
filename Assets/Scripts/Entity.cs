@@ -16,13 +16,7 @@ public class Entity : MonoBehaviour
 
     private List<Platform> m_Touching = new List<Platform>();
 
-    public bool IsFalling
-    {
-        get
-        {
-            return m_Touching.Count == 0;
-        }
-    }
+    public bool IsFalling { get { return m_Touching.Count == 0; } }
 
     private void Awake()
     {

@@ -31,11 +31,11 @@ public class PlayerMovementFSM
     private Direction m_LastDirection = Direction.None;
     private float m_ElapsedTimeExtra = 0f;
 
-    private float MoveRampRatio { get; set; }
+    private float StartMoveRampRatio { get; set; }
     private float StopMoveRampRatio
     {
-        get { return 1 - MoveRampRatio; }
-        set { MoveRampRatio = 1 - value; }
+        get { return 1 - StartMoveRampRatio; }
+        set { StartMoveRampRatio = 1 - value; }
     }
 
     public void Initialize(AbstractEntityController a_Controller)
@@ -67,7 +67,7 @@ public class PlayerMovementFSM
             case FSM.Step.Enter:
                 {
                     m_StartMoveBeginTime = Time.time;
-                    m_ElapsedTimeExtra = MoveRampRatio * m_StartMoveDuration;
+                    m_ElapsedTimeExtra = StartMoveRampRatio * m_StartMoveDuration;
                     m_LastDirection = m_Controller.CurrentDirectionPressed;
                     m_SpeedMultiplier = 0f;
                     return null;
@@ -87,10 +87,10 @@ public class PlayerMovementFSM
                     }
 
                     float elapsedTime = Time.time - m_StartMoveBeginTime + m_ElapsedTimeExtra;
-                    MoveRampRatio = Mathf.Clamp01(elapsedTime / m_StartMoveDuration);
-                    m_SpeedMultiplier = Mathf.Clamp01(m_StartMoveCurve.Evaluate(MoveRampRatio));
+                    StartMoveRampRatio = Mathf.Clamp01(elapsedTime / m_StartMoveDuration);
+                    m_SpeedMultiplier = Mathf.Clamp01(m_StartMoveCurve.Evaluate(StartMoveRampRatio));
 
-                    if (MoveRampRatio == 1f)
+                    if (StartMoveRampRatio == 1f)
                     {
                         return MoveState;
                     }
