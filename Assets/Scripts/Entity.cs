@@ -37,12 +37,13 @@ public class Entity : MonoBehaviour
         m_MovementFSM.Update();
 
         DoHorizontalUpdate();
-        DoTouchingUpdate();
         DoVerticalUpdate();
 
         transform.position += m_Velocity * Time.deltaTime;
 
-        // Debug reset
+        DoTouchingUpdate();
+
+#if UNITY_EDITOR
         if (Input.GetKeyDown(KeyCode.R))
         {
             Vector3 screenMiddle = new Vector3(Screen.width, Screen.height) / 2f;
@@ -51,6 +52,7 @@ public class Entity : MonoBehaviour
             transform.position = pos;
             m_Velocity = Vector3.zero;
         }
+#endif
     }
 
     public void StopDownwardsMovement()
@@ -104,10 +106,10 @@ public class Entity : MonoBehaviour
 
     private void DoHorizontalUpdate()
     {
-        int direction = m_Controller.CurrentDirectionPressed;
-        if (direction == 0)
+        Direction direction = m_Controller.CurrentDirectionPressed;
+        if (direction == Direction.None)
         {
-            direction = (int)Mathf.Sign(m_Velocity.x);
+            direction = (Direction)Mathf.Sign(m_Velocity.x);
         }
 
         float maxSpeed = m_MaxSpeedWalk;
@@ -116,7 +118,7 @@ public class Entity : MonoBehaviour
             maxSpeed = m_MaxSpeedRun;
         }
 
-        float vel = direction * maxSpeed * m_MovementFSM.m_SpeedMultiplier;
+        float vel = (int)direction * maxSpeed * m_MovementFSM.m_SpeedMultiplier;
 
         m_Velocity.x = vel;
     }

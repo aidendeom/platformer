@@ -1,6 +1,13 @@
 ﻿using System;
 using UnityEngine;
 
+public enum Direction
+{
+    Left = -1,
+    None = 0,
+    Right = 1
+}
+
 [Serializable]
 public class PlayerMovementFSM
 {
@@ -15,16 +22,26 @@ public class PlayerMovementFSM
     private AnimationCurve m_StopMoveCurve = null;
     [SerializeField]
     private float m_StopMoveDuration = 0.5f;
+    [SerializeField]
+    private bool m_EnableFSMDebug = false;
 
     private AbstractEntityController m_Controller = null;
     private FSM m_FSM = null;
     private float m_StartMoveBeginTime = 0f;
-    private int m_LastDirection = 0;
+    private Direction m_LastDirection = Direction.None;
+    private float m_ElapsedTimeExtra = 0f;
+
+    private float MoveRampRatio { get; set; }
+    private float StopMoveRampRatio
+    {
+        get { return 1 - MoveRampRatio; }
+        set { MoveRampRatio = 1 - value; }
+    }
 
     public void Initialize(AbstractEntityController a_Controller)
     {
         m_Controller = a_Controller;
-        m_FSM = new FSM();
+        m_FSM = new FSM(m_EnableFSMDebug);
         m_FSM.TransitionTo(IdleState);
     }
 
@@ -35,7 +52,7 @@ public class PlayerMovementFSM
 
     private FSM.FSMDelegate IdleState(FSM.Step a_Step)
     {
-        if (m_Controller.CurrentDirectionPressed != 0)
+        if (m_Controller.CurrentDirectionPressed != Direction.None)
         {
             return StartMoveState;
         }
@@ -50,6 +67,7 @@ public class PlayerMovementFSM
             case FSM.Step.Enter:
                 {
                     m_StartMoveBeginTime = Time.time;
+                    m_ElapsedTimeExtra = MoveRampRatio * m_StartMoveDuration;
                     m_LastDirection = m_Controller.CurrentDirectionPressed;
                     m_SpeedMultiplier = 0f;
                     return null;
@@ -58,7 +76,7 @@ public class PlayerMovementFSM
                 {
                     if (m_LastDirection != m_Controller.CurrentDirectionPressed)
                     {
-                        if (m_Controller.CurrentDirectionPressed == 0)
+                        if (m_Controller.CurrentDirectionPressed == Direction.None)
                         {
                             return StopMoveState;
                         }
@@ -68,11 +86,11 @@ public class PlayerMovementFSM
                         }
                     }
 
-                    float elapsedTime = Time.time - m_StartMoveBeginTime;
-                    float ratio = Mathf.Clamp01(elapsedTime / m_StartMoveDuration);
-                    m_SpeedMultiplier = Mathf.Clamp01(m_StartMoveCurve.Evaluate(ratio));
+                    float elapsedTime = Time.time - m_StartMoveBeginTime + m_ElapsedTimeExtra;
+                    MoveRampRatio = Mathf.Clamp01(elapsedTime / m_StartMoveDuration);
+                    m_SpeedMultiplier = Mathf.Clamp01(m_StartMoveCurve.Evaluate(MoveRampRatio));
 
-                    if (ratio == 1f)
+                    if (MoveRampRatio == 1f)
                     {
                         return MoveState;
                     }
@@ -97,7 +115,7 @@ public class PlayerMovementFSM
                 {
                     if (m_LastDirection != m_Controller.CurrentDirectionPressed)
                     {
-                        if (m_Controller.CurrentDirectionPressed == 0)
+                        if (m_Controller.CurrentDirectionPressed == Direction.None)
                         {
                             return StopMoveState;
                         }
@@ -122,20 +140,21 @@ public class PlayerMovementFSM
             case FSM.Step.Enter:
                 {
                     m_StopMoveBeginTime = Time.time;
+                    m_ElapsedTimeExtra = StopMoveRampRatio * m_StopMoveDuration;
                     return null;
                 }
             case FSM.Step.Update:
                 {
-                    if (m_Controller.CurrentDirectionPressed != 0)
+                    if (m_Controller.CurrentDirectionPressed != Direction.None)
                     {
                         return StartMoveState;
                     }
 
-                    float elapsedTime = Time.time - m_StopMoveBeginTime;
-                    float ratio = Mathf.Clamp01(elapsedTime / m_StopMoveDuration);
-                    m_SpeedMultiplier = Mathf.Clamp01(m_StopMoveCurve.Evaluate(ratio));
+                    float elapsedTime = Time.time - m_StopMoveBeginTime + m_ElapsedTimeExtra;
+                    StopMoveRampRatio = Mathf.Clamp01(elapsedTime / m_StopMoveDuration);
+                    m_SpeedMultiplier = Mathf.Clamp01(m_StopMoveCurve.Evaluate(StopMoveRampRatio));
 
-                    if (ratio == 1f)
+                    if (StopMoveRampRatio == 1f)
                     {
                         return IdleState;
                     }

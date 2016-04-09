@@ -181,7 +181,7 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 0
-    m_StartMoveDuration: 0.5
+    m_StartMoveDuration: 0.2
     m_StopMoveCurve:
       serializedVersion: 2
       m_Curve:
@@ -198,7 +198,8 @@ MonoBehaviour:
       m_PreInfinity: 2
       m_PostInfinity: 2
       m_RotationOrder: 0
-    m_StopMoveDuration: 0.5
+    m_StopMoveDuration: 0.2
+    m_EnableFSMDebug: 0
 --- !u!114 &11464698
 MonoBehaviour:
   m_ObjectHideFlags: 1

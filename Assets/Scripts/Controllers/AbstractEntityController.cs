@@ -7,13 +7,13 @@ public abstract class AbstractEntityController : MonoBehaviour
     public abstract bool IsJumping { get; }
     public abstract bool IsRunning { get; }
 
-    public int CurrentDirectionPressed
+    public Direction CurrentDirectionPressed
     {
         get
         {
-            if (IsMovingLeft) { return -1; }
-            if (IsMovingRight) { return 1; }
-            return 0;
+            if (IsMovingLeft) { return Direction.Left; }
+            if (IsMovingRight) { return Direction.Right; }
+            return Direction.None;
         }
     }
 }
